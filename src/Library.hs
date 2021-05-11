@@ -4,7 +4,9 @@ import           RIO
 import           RIO.ByteString       (ByteString)
 import qualified RIO.ByteString       as ByteString
 import qualified RIO.ByteString.Lazy  as LazyByteString
-import           System.IO            (putStrLn)
+import qualified RIO.Directory        as Directory
+import qualified RIO.List             as List
+import           System.IO            (print, putStr, putStrLn)
 import qualified System.Process.Typed as Process
 
 data GitStatus
@@ -29,6 +31,22 @@ newtype ErrorBytes = ErrorBytes ByteString
 
 newtype CommandString = CommandString String deriving (Eq, Show)
 newtype WorkingDirectory = WorkingDirectory FilePath  deriving (Eq, Show)
+
+getSubDirectories :: FilePath  -> IO [FilePath]
+getSubDirectories path = do
+  files <- Directory.listDirectory path
+  let filesWithCompletePath = fmap ((List.dropWhileEnd (== '/') path ++ "/") ++) files
+  filterM Directory.doesDirectoryExist filesWithCompletePath
+
+getGitStatuses :: FilePath  -> IO [GitStatus]
+getGitStatuses path = do
+  localGitStatus <- getGitStatus path
+  case localGitStatus of
+    NotGitRepo -> do
+      subDirectories <- getSubDirectories path
+      concat <$> traverse getGitStatuses subDirectories
+      -- foldMap getGitStatuses subDirectories
+    otherwise -> pure $ pure localGitStatus
 
 getGitStatus :: FilePath -> IO GitStatus
 getGitStatus path = do
