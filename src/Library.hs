@@ -12,6 +12,7 @@ data GitStatus
   | NotGitRepo
   | Clean
   | NoCommits
+  | UnknownStatus ProcessOutput
   deriving (Eq , Show)
 
 data ProcessOutput = ProcessOutput
@@ -29,6 +30,21 @@ newtype ErrorBytes = ErrorBytes ByteString
 newtype CommandString = CommandString String deriving (Eq, Show)
 newtype WorkingDirectory = WorkingDirectory FilePath  deriving (Eq, Show)
 
+getGitStatus :: FilePath -> IO GitStatus
+getGitStatus path = do
+  processOutput@ProcessOutput
+    { standardOut = (OutputBytes outputBytes),
+      standardError = (ErrorBytes errorBytes)
+    }  <-
+    getProcessOutput (WorkingDirectory path) (CommandString "git status")
+  -- traceShowM processOutput
+  if
+    | ByteString.isInfixOf "Changes not staged for commit" outputBytes -> return UnstagedChanges
+    | ByteString.isInfixOf "No commits yet" outputBytes -> return NoCommits
+    | ByteString.isInfixOf "nothing to commit" outputBytes -> return Clean
+    | ByteString.isInfixOf "not a git repo" errorBytes -> return NotGitRepo
+    | otherwise -> pure $ UnknownStatus processOutput
+
 getProcessOutput :: WorkingDirectory -> CommandString -> IO ProcessOutput
 getProcessOutput (WorkingDirectory workingDir) (CommandString commandString) = do
   case words commandString of
@@ -38,6 +54,7 @@ getProcessOutput (WorkingDirectory workingDir) (CommandString commandString) = d
             Process.setStdout Process.byteStringOutput &
             Process.setStderr Process.byteStringOutput &
             Process.setWorkingDir workingDir
+
       Process.withProcessWait processConfiguration $ \process -> atomically $ do
         outBytes <- Process.getStdout process
         errorBytes <- Process.getStderr process
