@@ -1,8 +1,8 @@
 ## unstaged
 
 ### following tutorial for creating a simple program to find git repos with unstaged changes under a path
-[youtube video](https://www.youtube.com/watch?v=WYrhfPcyqbw)
-[git repo](https://github.com/GoNZooo/unstaged/)
+- [youtube video](https://www.youtube.com/watch?v=WYrhfPcyqbw)
+- [git repo](https://github.com/GoNZooo/unstaged/)
 
 
 ### libraries used:
