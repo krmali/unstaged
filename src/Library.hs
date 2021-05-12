@@ -1,20 +1,20 @@
 module Library where
 
 import           RIO
-import           RIO.ByteString       (ByteString)
 import qualified RIO.ByteString       as ByteString
 import qualified RIO.ByteString.Lazy  as LazyByteString
 import qualified RIO.Directory        as Directory
 import qualified RIO.List             as List
-import           System.IO            (print, putStr, putStrLn)
+import qualified System.Environment   as Environment
+import           System.IO            (print, putStrLn)
 import qualified System.Process.Typed as Process
 
 data GitStatus
-  = UnstagedChanges
+  = UnstagedChanges FilePath
   | NotGitRepo
-  | Clean
-  | NoCommits
-  | UnknownStatus ProcessOutput
+  | Clean FilePath
+  | NoCommits FilePath
+  | UnknownStatus FilePath ProcessOutput
   deriving (Eq , Show)
 
 data ProcessOutput = ProcessOutput
@@ -46,7 +46,7 @@ getGitStatuses path = do
       subDirectories <- getSubDirectories path
       concat <$> traverse getGitStatuses subDirectories
       -- foldMap getGitStatuses subDirectories
-    otherwise -> pure $ pure localGitStatus
+    _ -> pure $ pure localGitStatus
 
 getGitStatus :: FilePath -> IO GitStatus
 getGitStatus path = do
@@ -57,11 +57,11 @@ getGitStatus path = do
     getProcessOutput (WorkingDirectory path) (CommandString "git status")
   -- traceShowM processOutput
   if
-    | ByteString.isInfixOf "Changes not staged for commit" outputBytes -> return UnstagedChanges
-    | ByteString.isInfixOf "No commits yet" outputBytes -> return NoCommits
-    | ByteString.isInfixOf "nothing to commit" outputBytes -> return Clean
+    | ByteString.isInfixOf "Changes not staged for commit" outputBytes -> return $ UnstagedChanges path
+    | ByteString.isInfixOf "No commits yet" outputBytes -> return $ NoCommits path
+    | ByteString.isInfixOf "nothing to commit" outputBytes -> return $ Clean path
     | ByteString.isInfixOf "not a git repo" errorBytes -> return NotGitRepo
-    | otherwise -> pure $ UnknownStatus processOutput
+    | otherwise -> pure $ UnknownStatus path processOutput
 
 getProcessOutput :: WorkingDirectory -> CommandString -> IO ProcessOutput
 getProcessOutput (WorkingDirectory workingDir) (CommandString commandString) = do
@@ -83,4 +83,15 @@ getProcessOutput (WorkingDirectory workingDir) (CommandString commandString) = d
 
 runMain :: IO ()
 runMain = do
-  putStrLn "Hello, World!"
+  args <- Environment.getArgs
+  case args of
+    [path] -> do
+      statuses <- getGitStatuses path
+      let unstaged = foldr (\status paths -> case status of
+            UnstagedChanges p -> p : paths
+            _                 -> paths
+            )
+            [] statuses
+            & List.sort
+      forM_ unstaged putStrLn
+    _ -> error "path to search should be first argument"
